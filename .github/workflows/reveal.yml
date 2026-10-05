@@ -1,0 +1,54 @@
+# The reveal job (build design §6, [PRD-6]). After a round's deadline it opens every sealed hand-in, posts each
+# result naming its author, and records it in the intake log. It starts on comment activity, on the timer (which
+# GitHub may delay or drop), and by hand with `gh arch-panel reveal start`. One run at a time for the whole
+# repo; each run does all the work that is due, so a run GitHub cancels while it waits loses nothing.
+#
+# This is a template. A setup step installs it in a review repo and sets ARCH_PANEL_COMMIT to the commit of
+# qiragu/arch-panel the job builds the tool from.
+name: reveal
+
+on:
+  issue_comment:
+    types: [created, edited, deleted]
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+    inputs:
+      review:
+        description: The review to reveal; empty for every review with a round due
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: arch-panel-reveal
+  cancel-in-progress: false
+
+env:
+  ARCH_PANEL_COMMIT: ff25b38f2d59666b084c3cf0bfd223d2ad408220
+
+jobs:
+  reveal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: qiragu/arch-panel
+          ref: ${{ env.ARCH_PANEL_COMMIT }}
+          path: arch-panel
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: arch-panel/go.mod
+          cache: false
+      - name: Build the tool without the pages
+        working-directory: arch-panel
+        run: go build -tags nopages -o "$RUNNER_TEMP/gh-arch-panel" ./cmd/gh-arch-panel
+      - name: Reveal
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REVIEW: ${{ inputs.review }}
+        run: '"$RUNNER_TEMP/gh-arch-panel" reveal run ${REVIEW:+"$REVIEW"}'

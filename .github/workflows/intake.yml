@@ -1,0 +1,57 @@
+# The intake job (build design §3a, [PRD-8], [PRD-9]). On each comment, review and issue event it writes one
+# new file to the intake branch; dispatched with an opening record, it opens a round. A failed run is a capture
+# that failed, and stays visible in the Actions history.
+#
+# This is a template. A setup step installs it in a review repo and sets ARCH_PANEL_COMMIT to the commit of
+# qiragu/arch-panel the job builds the tool from.
+name: intake
+
+on:
+  issue_comment:
+  pull_request_review_comment:
+  pull_request_review:
+  issues:
+  workflow_dispatch:
+    inputs:
+      opening:
+        description: The round's opening record, as JSON
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: read
+  issues: read
+
+env:
+  ARCH_PANEL_COMMIT: ff25b38f2d59666b084c3cf0bfd223d2ad408220
+
+jobs:
+  intake:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: qiragu/arch-panel
+          ref: ${{ env.ARCH_PANEL_COMMIT }}
+          path: arch-panel
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: arch-panel/go.mod
+          cache: false
+      - name: Build the tool without the pages
+        working-directory: arch-panel
+        run: go build -tags nopages -o "$RUNNER_TEMP/gh-arch-panel" ./cmd/gh-arch-panel
+      - name: Record the event
+        if: github.event_name != 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: '"$RUNNER_TEMP/gh-arch-panel" intake record'
+      - name: Open the round
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPENING: ${{ inputs.opening }}
+        run: |
+          printf '%s' "$OPENING" > "$RUNNER_TEMP/opening.json"
+          "$RUNNER_TEMP/gh-arch-panel" intake open "$RUNNER_TEMP/opening.json"

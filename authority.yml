@@ -1,0 +1,15 @@
+# The authority map: each area of a review, its decider and escalation path, and the final approver.
+# The committee that runs this repo fills it in, in the format of docs/design/file-formats.md in
+# qiragu/arch-panel. Until then, gh arch-panel prepare refuses, because the map has no approver.
+# An example, to replace with the committee's own areas and logins:
+#
+# areas:
+#   security:
+#     decider: alice
+#     escalation: [carol, dave]
+#   release:
+#     decider: bob
+#     escalation: [carol]
+# approver:
+#   login: carol
+#   escalation: [dave]
